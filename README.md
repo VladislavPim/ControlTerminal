@@ -1,4 +1,3 @@
-
 # ControlTerminal 🚀
 
 ![ControlTerminal Logo](assets/logo.ico)
@@ -14,6 +13,7 @@
 - 🔍 **Command History** — navigate with up/down arrows
 - ⌨️ **Keyboard Shortcuts** — Ctrl+A (select all), Ctrl+C (copy), Ctrl+V (paste)
 - 💾 **Command Logging** — all commands are logged to `.controlllog`
+- ⚙️ **Persistent Configuration** — settings saved in `.controlconfig` file
 - 🚀 **Built-in Commands** — 50+ commands for files, processes, network, and system
 - 📦 **Aliases & Environment Variables** — full support
 - 🧮 **Built-in Calculator** — evaluate expressions directly in the terminal
@@ -28,9 +28,9 @@
 - [Installation](#installation)
 - [Building from Source](#building-from-source)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Configuration](#configuration)
 - [Commands](#commands)
 - [Examples](#examples)
-- [Configuration](#configuration)
 - [Logging](#logging)
 - [FAQ](#faq)
 - [License](#license)
@@ -75,6 +75,92 @@ target\release\ControlTerminal.exe
 | `Ctrl + C` | Copy selected text |
 | `Ctrl + V` | Paste text from clipboard |
 | `↑` / `↓` | Navigate command history |
+
+---
+
+## ⚙️ Configuration
+
+ControlTerminal uses a configuration file to persist your settings between sessions.
+
+### 📍 Configuration File Location
+
+```
+Windows: C:\Users\<YourUsername>\.controlconfig
+Example: C:\Users\Vladislav\.controlconfig
+```
+
+The file is automatically created on first run with default settings.
+
+### 🔧 Configuration Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `bgcolor` | Background color | `"gray"` | `"darkgray"` |
+| `fgcolor` | Text color | `"white"` | `"yellow"` |
+| `aliases` | Command shortcuts | `{}` | `{ "ll": "ls -l" }` |
+| `env` | Environment variables | `{}` | `{ "EDITOR": "notepad" }` |
+
+### 🎨 Available Colors
+
+- `black`, `white`, `red`, `green`, `blue`
+- `gray`/`grey`, `darkgray`, `lightgray`
+- `yellow`, `cyan`, `magenta`
+
+### 📝 Example Configuration File
+
+Create or edit `%USERPROFILE%\.controlconfig`:
+
+```toml
+# ControlTerminal Configuration File
+
+# Colors
+bgcolor = "darkgray"
+fgcolor = "yellow"
+
+# Command Aliases
+[aliases]
+# Navigation
+".." = "cd .."
+"..." = "cd ../.."
+"ll" = "ls -l"
+"la" = "ls -a"
+
+# Git shortcuts
+"gs" = "git status"
+"ga" = "git add"
+"gc" = "git commit -m"
+"gp" = "git push"
+"gl" = "git log --oneline"
+
+# Terminal shortcuts
+"cls" = "clear"
+"h" = "history"
+"q" = "exit"
+
+# Environment Variables
+[env]
+EDITOR = "code"
+BROWSER = "chrome"
+TERM = "xterm-256color"
+```
+
+### 🔄 How It Works
+
+1. **On startup** — terminal reads `.controlconfig` from your home directory
+2. **Applies settings** — colors, aliases, and environment variables are loaded
+3. **Auto-save** — when you change colors (`bgcolor`/`fgcolor`) or add aliases (`alias`), the config is automatically updated
+4. **Persistence** — all settings persist between sessions
+
+### 📋 Managing Configuration via Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `bgcolor <color>` | Change and save background color | `bgcolor blue` |
+| `fgcolor <color>` | Change and save text color | `fgcolor yellow` |
+| `alias <name> <value>` | Add alias and save | `alias ll ls -l` |
+| `alias` | List all aliases | `alias` |
+| `set <VAR>=<value>` | Set environment variable | `set EDITOR=notepad` |
+| `set` | List all variables | `set` |
 
 ---
 
@@ -156,8 +242,6 @@ target\release\ControlTerminal.exe
 | `set` | `env` | View or set environment variables |
 | `run` | `execute`, `start` | Run external program |
 
-**Available colors:** `black`, `white`, `red`, `green`, `blue`, `gray`, `darkgray`, `lightgray`, `yellow`, `cyan`, `magenta`
-
 ### 🔌 Startup Management (Windows)
 
 | Command | Aliases | Description |
@@ -209,7 +293,7 @@ File touched: test.txt
 C:\Users\User> sysinfo
 System name: Windows
 Kernel version: 10.0.22631
-OS version: Windows 10 Home
+OS version: Windows 11 Home
 Hostname: DESKTOP-ABC123
 Total memory: 16384 MB
 Number of CPUs: 8
@@ -238,31 +322,29 @@ C:\Users\User> startup list
    - notepad.exe
 ```
 
-### Customization
+### Configuration Examples
 ```
+# Change colors (auto-saved)
 C:\Users\User> bgcolor darkgray
 Background color changed
 
 C:\Users\User> fgcolor yellow
 Foreground color changed
-```
 
----
+# Create aliases (auto-saved)
+C:\Users\User> alias ll ls -l
+Alias added
 
-## ⚙️ Configuration
+C:\Users\User> alias .. cd ..
+Alias added
 
-Configuration file `.controlconfig` is created in your home directory on first run:
+# Use aliases
+C:\Users\User> ll
+[DIR]  Desktop
+[DIR]  Downloads
 
-```ini
-bgcolor = gray
-fgcolor = white
-aliases = {
-    "ll": "ls -l",
-    "gs": "git status"
-}
-env = {
-    "EDITOR": "notepad"
-}
+C:\Users\User> ..
+C:\Users>
 ```
 
 ---
@@ -295,6 +377,21 @@ All commands are automatically logged to **`.controlllog`** in the current worki
 
 ### Q: Where are settings stored?
 **A:** In `.controlconfig` in your home directory (`C:\Users\YourName\.controlconfig`).
+
+### Q: How do I edit the configuration file?
+**A:** Open it in any text editor:
+```bash
+notepad %USERPROFILE%\.controlconfig
+```
+
+### Q: Do I need to restart after changing config?
+**A:** No! Changes are loaded automatically on next command execution. Colors update immediately when using `bgcolor`/`fgcolor` commands.
+
+### Q: Can I share my config with others?
+**A:** Yes! Just copy the `.controlconfig` file to another user's home directory.
+
+### Q: Why doesn't scroll always follow the text?
+**A:** Scroll follows only when you're at the bottom. If you scroll up, new text won't move your position — this lets you read history without distraction.
 
 ---
 
