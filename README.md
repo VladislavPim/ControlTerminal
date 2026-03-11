@@ -61,250 +61,111 @@ cd ControlTerminal
 cargo build --release
 ```
 
-📚 Commands
-Navigation & Files
-Command
-Aliases
-Description
-Example
-cd
-chdir, directory
-Change directory
-cd C:\Windows
-ls
-dir, list
-List directory contents
-ls or ls D:\
-pwd
-—
-Print working directory
-pwd
-tree
-—
-Show folder tree
-tree or tree C:\Projects
-du
-—
-Show file/folder size
-du or du file.txt
-df
-diskspace
-Show disk free space
-df
-stat
-fileinfo
-Detailed file information
-stat Cargo.toml
-File Operations
-Command
-Aliases
-Description
-Example
-cat
-type, show
-Display file contents
-cat README.md
-cp
-copy
-Copy files/folders
-cp file.txt backup.txt
-mv
-move, rename
-Move/rename files
-mv old.txt new.txt
-rm
-del, delete
-Delete files/folders
-rm temp.txt
-mkdir
-md, makedir
-Create directory
-mkdir new_folder
-touch
-create
-Create empty file
-touch notes.txt
-find
-search
-Search files by name
-find .rs src
-System Information
-Command
-Aliases
-Description
-Example
-sysinfo
-system, info, neofetch
-Hardware information
-sysinfo
-uptime
-—
-System uptime
-uptime
-date
-—
-Show/set date
-date
-time
-—
-Show/set time
-time
-hostname
-—
-Computer name
-hostname
-whoami
-—
-Current username
-whoami
-Process Management
-Command
-Aliases
-Description
-Example
-ps
-processes, tasklist
-List running processes
-ps
-kill
-terminate, end
-Terminate process by PID
-kill 1234
-Network
-Command
-Aliases
-Description
-Example
-ping
-—
-Test host connectivity
-ping google.com
-ipconfig
-ip
-Network interface information
-ipconfig
-netstat
-—
-Network statistics
-netstat
-curl
-download
-Download file via HTTP
-curl https://example.com
-Text Processing
-Command
-Aliases
-Description
-Example
-grep
-findstr
-Search for pattern in files
-grep fn src/main.rs
-head
-—
-Show first N lines
-head -n 5 file.txt
-tail
-—
-Show last N lines
-tail -n 10 log.txt
-wc
-—
-Count lines/words/characters
-wc document.txt
-sort
-—
-Sort lines
-sort names.txt
-uniq
-—
-Remove duplicate lines
-uniq data.txt
-echo
-—
-Print text
-echo Hello World
-calc
-math
-Simple calculator
-calc 2+2*3
-Terminal Management
-Command
-Aliases
-Description
-Example
-bgcolor
-—
-Change background color
-bgcolor blue
-fgcolor
-—
-Change text color
-fgcolor yellow
-clear
-cls
-Clear screen
-clear
-history
-—
-Show command history
-history
-alias
-—
-Create command alias
-alias ll ls -l
-set
-env
-View/set environment variables
-set PATH=C:\bin
-run
-execute, start
-Run external program
-run notepad.exe
-Available colors: black, white, red, green, blue, gray, darkgray, lightgray, yellow, cyan, magenta
-Startup Management
-Command
-Aliases
-Description
-Example
-startup add
-—
-Add program to Windows autostart
-startup add notepad.exe
-startup remove
-—
-Remove program from autostart
-startup remove notepad.exe
-startup list
-—
-List autostart programs
-startup list
-Note: Works via Windows registry (HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run).
-System Actions
-Command
-Aliases
-Description
-Example
-shutdown
-—
-Shutdown computer
-shutdown /s
-reboot
-—
-Reboot computer
-reboot
-Help & Exit
-Command
-Aliases
-Description
-Example
-help
-—
-Show all commands
-help
-exit
-quit
-Exit terminal
-exit
+# Complete ControlTerminal Commands List
+
+## 📁 Navigation & Files
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `cd` | `chdir`, `directory` | Change current directory |
+| `ls` | `dir`, `list` | List directory contents |
+| `pwd` | — | Print current working directory |
+| `tree` | — | Display folder tree structure |
+| `du` | — | Show disk usage (file/folder size) |
+| `df` | `diskspace` | Show free disk space |
+| `stat` | `fileinfo` | Show detailed file information |
+
+## 📄 File Operations
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `cat` | `type`, `show` | Display file contents |
+| `cp` | `copy` | Copy files or folders |
+| `mv` | `move`, `rename` | Move or rename files/folders |
+| `rm` | `del`, `delete` | Delete files or folders |
+| `mkdir` | `md`, `makedir` | Create new directory |
+| `touch` | `create` | Create empty file or update file timestamp |
+| `find` | `search` | Search for files by name |
+
+## 💻 System Information
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `sysinfo` | `system`, `info`, `neofetch` | Display system hardware information (CPU, RAM, disks) |
+| `uptime` | — | Show system uptime |
+| `date` | — | Display current date |
+| `time` | — | Display current time |
+| `hostname` | — | Show computer name |
+| `whoami` | — | Show current username |
+
+## ⚙️ Process Management
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `ps` | `processes`, `tasklist` | List running processes |
+| `kill` | `terminate`, `end` | Terminate process by PID or name |
+
+## 🌐 Network
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `ping` | — | Test connectivity to a host |
+| `ipconfig` | `ip` | Display network interface information |
+| `netstat` | — | Show network statistics and connections |
+| `curl` | `download` | Download file via HTTP/HTTPS |
+
+## 📝 Text Processing
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `grep` | `findstr` | Search for text pattern in files |
+| `head` | — | Display first N lines of file |
+| `tail` | — | Display last N lines of file |
+| `wc` | — | Count lines, words, and characters |
+| `sort` | — | Sort lines alphabetically |
+| `uniq` | — | Remove duplicate lines |
+| `echo` | — | Print text to output |
+| `calc` | `math` | Evaluate mathematical expressions |
+
+## 🎨 Terminal Management
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `bgcolor` | — | Change terminal background color |
+| `fgcolor` | — | Change terminal text color |
+| `clear` | `cls` | Clear terminal screen |
+| `history` | — | Show command history |
+| `alias` | — | Create or list command aliases |
+| `set` | `env` | View or set environment variables |
+| `run` | `execute`, `start` | Run external program |
+
+**Available colors:** `black`, `white`, `red`, `green`, `blue`, `gray`, `darkgray`, `lightgray`, `yellow`, `cyan`, `magenta`
+
+## 🔌 Startup Management (Windows)
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `startup add` | — | Add program to Windows autostart |
+| `startup remove` | — | Remove program from Windows autostart |
+| `startup list` | — | List all programs in Windows autostart |
+
+## 🔧 System Actions
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `shutdown` | — | Shutdown the computer |
+| `reboot` | — | Restart the computer |
+
+## ❓ Help & Exit
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `help` | — | Display all available commands |
+| `exit` | `quit` | Exit ControlTerminal |
+
+---
+
+**Total Commands: 48** (including aliases) 🚀
+
 # Run the terminal
 target\release\ControlTerminal.exe
