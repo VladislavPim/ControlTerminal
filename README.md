@@ -1,6 +1,3 @@
-# README.md for GitHub Repository
-
-```markdown
 # ControlTerminal 🚀
 
 ![ControlTerminal Logo](assets/logo.ico)
