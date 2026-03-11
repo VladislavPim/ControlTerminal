@@ -1,4 +1,4 @@
-```markdown
+
 # ControlTerminal 🚀
 
 ![ControlTerminal Logo](assets/logo.ico)
