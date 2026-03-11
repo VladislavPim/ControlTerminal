@@ -70,5 +70,84 @@ cd ControlTerminal
 # Build in release mode
 cargo build --release
 
+⌨️ Keyboard Shortcuts
+Shortcut	Action
+Ctrl + A	Select all text in input line
+Ctrl + C	Copy selected text
+Ctrl + V	Paste text from clipboard
+↑ / ↓	Navigate command history
+📚 Commands
+Navigation & Files
+Command	Aliases	Description	Example
+cd	chdir, directory	Change directory	cd C:\Windows
+ls	dir, list	List directory contents	ls or ls D:\
+pwd	—	Print working directory	pwd
+tree	—	Show folder tree	tree or tree C:\Projects
+du	—	Show file/folder size	du or du file.txt
+df	diskspace	Show disk free space	df
+stat	fileinfo	Detailed file information	stat Cargo.toml
+File Operations
+Command	Aliases	Description	Example
+cat	type, show	Display file contents	cat README.md
+cp	copy	Copy files/folders	cp file.txt backup.txt
+mv	move, rename	Move/rename files	mv old.txt new.txt
+rm	del, delete	Delete files/folders	rm temp.txt
+mkdir	md, makedir	Create directory	mkdir new_folder
+touch	create	Create empty file	touch notes.txt
+find	search	Search files by name	find .rs src
+System Information
+Command	Aliases	Description	Example
+sysinfo	system, info, neofetch	Hardware information	sysinfo
+uptime	—	System uptime	uptime
+date	—	Show/set date	date
+time	—	Show/set time	time
+hostname	—	Computer name	hostname
+whoami	—	Current username	whoami
+Process Management
+Command	Aliases	Description	Example
+ps	processes, tasklist	List running processes	ps
+kill	terminate, end	Terminate process by PID	kill 1234
+Network
+Command	Aliases	Description	Example
+ping	—	Test host connectivity	ping google.com
+ipconfig	ip	Network interface information	ipconfig
+netstat	—	Network statistics	netstat
+curl	download	Download file via HTTP	curl https://example.com
+Text Processing
+Command	Aliases	Description	Example
+grep	findstr	Search for pattern in files	grep fn src/main.rs
+head	—	Show first N lines	head -n 5 file.txt
+tail	—	Show last N lines	tail -n 10 log.txt
+wc	—	Count lines/words/characters	wc document.txt
+sort	—	Sort lines	sort names.txt
+uniq	—	Remove duplicate lines	uniq data.txt
+echo	—	Print text	echo Hello World
+calc	math	Simple calculator	calc 2+2*3
+Terminal Management
+Command	Aliases	Description	Example
+bgcolor	—	Change background color	bgcolor blue
+fgcolor	—	Change text color	fgcolor yellow
+clear	cls	Clear screen	clear
+history	—	Show command history	history
+alias	—	Create command alias	alias ll ls -l
+set	env	View/set environment variables	set PATH=C:\bin
+run	execute, start	Run external program	run notepad.exe
+Available colors: black, white, red, green, blue, gray, darkgray, lightgray, yellow, cyan, magenta
+
+Startup Management
+Command	Aliases	Description	Example
+startup add	—	Add program to Windows autostart	startup add notepad.exe
+startup remove	—	Remove program from autostart	startup remove notepad.exe
+startup list	—	List autostart programs	startup list
+Note: Works via Windows registry (HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run).
+
+System Actions
+Command	Aliases	Description	Example
+shutdown	—	Shutdown computer	shutdown /s
+reboot	—	Reboot computer	reboot
+Help & Exit
+Command	Aliases	Description	Example
+help	—	Show all commands	help
+exit	quit	Exit terminal	exit
 # Run the terminal
 target\release\ControlTerminal.exe
