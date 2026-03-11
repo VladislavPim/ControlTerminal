@@ -62,15 +62,12 @@
 
 ## 🔨 Building from Source
 
-```bash
 # Clone the repository
 git clone https://github.com/VladislavPim/ControlTerminal.git
 cd ControlTerminal
 
 # Build in release mode
 cargo build --release
-
-
 
 ⌨️ Keyboard Shortcuts
 Shortcut	Action
