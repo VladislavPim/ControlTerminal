@@ -139,5 +139,146 @@ Help & Exit
 Command	Aliases	Description	Example
 help	—	Show all commands	help
 exit	quit	Exit terminal	exit
+
+🎯 Usage Examples
+File Navigation
+text
+C:\Users\User> cd Desktop
+C:\Users\User\Desktop> ls
+[DIR]  Projects
+[FILE] notes.txt
+[FILE] todo.md
+File Operations
+text
+C:\Users\User\Desktop> mkdir test
+Directory created: test
+
+C:\Users\User\Desktop> touch test.txt
+File touched: test.txt
+
+C:\Users\User\Desktop> cp test.txt test_copy.txt
+Copied test.txt to test_copy.txt
+System Information
+text
+C:\Users\User> sysinfo
+System name: Windows
+Kernel version: 10.0.22631
+OS version: Windows 11 Home
+Hostname: DESKTOP-ABC123
+Total memory: 16384 MB
+Number of CPUs: 8
+Network
+text
+C:\Users\User> ping google.com
+Pinging google.com [142.250.185.46] with 32 bytes of data:
+Reply from 142.250.185.46: bytes=32 time=14ms TTL=117
+Text Processing
+text
+C:\Users\User\Desktop> cat notes.txt
+apple
+banana
+apple
+cherry
+
+C:\Users\User\Desktop> sort notes.txt
+apple
+apple
+banana
+cherry
+
+C:\Users\User\Desktop> grep cherry notes.txt
+cherry
+Calculator
+text
+C:\Users\User> calc 2+2
+2+2 = 4
+
+C:\Users\User> calc sin(3.1415/2)
+sin(3.1415/2) = 0.9999999999999999
+Startup Management
+text
+C:\Users\User> startup add notepad.exe
+✅ Added to startup: notepad.exe -> C:\Windows\notepad.exe
+
+C:\Users\User> startup list
+📋 Startup programs:
+   - notepad.exe
+   - discord.exe
+
+C:\Users\User> startup remove notepad.exe
+✅ Removed from startup: notepad.exe
+Customization
+text
+C:\Users\User> bgcolor darkgray
+Background color changed
+
+C:\Users\User> fgcolor yellow
+Foreground color changed
+Aliases
+text
+C:\Users\User> alias ll ls
+Alias added
+
+C:\Users\User> ll
+[DIR]  Desktop
+[DIR]  Downloads
+[FILE] file.txt
+⚙️ Configuration
+Configuration file .controlconfig is created in your home directory on first run:
+
+ini
+bgcolor = gray
+fgcolor = white
+aliases = {
+    "ll": "ls -l",
+    "gs": "git status"
+}
+env = {
+    "EDITOR": "notepad"
+}
+📝 Logging
+All commands are automatically logged to .controlllog in the current working directory:
+
+text
+[2024-01-15 10:30:45] cd Desktop
+[2024-01-15 10:30:48] ls
+[2024-01-15 10:30:52] echo Hello
+❓ FAQ
+Q: Why can't I create files in C:?
+A: You don't have write permissions to the system drive root. Run the terminal as administrator or create files in your user folder (e.g., C:\Users\YourName).
+
+Q: Does it support Cyrillic/Russian letters?
+A: Yes! The terminal fully supports UTF-8, including Cyrillic characters.
+
+Q: How do I copy text from the terminal?
+A: Select text with your mouse and press Ctrl+C, or use the context menu (right-click).
+
+Q: How do I paste text?
+A: Place cursor in the input field and press Ctrl+V.
+
+Q: Where are settings stored?
+A: In .controlconfig in your home directory (C:\Users\YourName\.controlconfig).
+
+Q: Why doesn't scroll always follow the text?
+A: Scroll follows only when you're at the bottom. If you scroll up, new text won't move your position — this lets you read history without distraction.
+
+📄 License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+👥 Author
+Vladislav Pim - GitHub
+
+🙏 Acknowledgments
+Built with Rust
+
+GUI powered by egui
+
+System information via sysinfo
+
+ControlTerminal — made with ❤️ and Rust 🦀
+
+https://img.shields.io/badge/Rust-1.70%252B-orange.svg
+https://img.shields.io/badge/Platform-Windows-blue.svg
+https://img.shields.io/badge/License-MIT-green.svg
 # Run the terminal
 target\release\ControlTerminal.exe
