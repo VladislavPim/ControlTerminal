@@ -3,8 +3,86 @@ use crate::logger::Logger;
 use crate::terminal::{CommandContext, TerminalState};
 use eframe::egui;
 use egui::{Color32, ScrollArea, TextEdit};
-use std::collections::VecDeque;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::path::PathBuf;
 
+// ---------- Структура конфигурации ----------
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    pub bgcolor: Option<String>,
+    pub fgcolor: Option<String>,
+    pub aliases: Option<HashMap<String, String>>,
+    pub env: Option<HashMap<String, String>>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            bgcolor: Some("gray".to_string()),
+            fgcolor: Some("white".to_string()),
+            aliases: Some(HashMap::new()),
+            env: Some(HashMap::new()),
+        }
+    }
+}
+
+impl Config {
+    pub fn load() -> Self {
+        let config_path = dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".controlconfig");
+
+        if !config_path.exists() {
+            let default = Config::default();
+            let _ = default.save();
+            return default;
+        }
+
+        match fs::read_to_string(&config_path) {
+            Ok(content) => {
+                toml::from_str(&content).unwrap_or_else(|e| {
+                    eprintln!("Error parsing config: {}", e);
+                    Config::default()
+                })
+            }
+            Err(e) => {
+                eprintln!("Error reading config: {}", e);
+                Config::default()
+            }
+        }
+    }
+
+    pub fn save(&self) -> Result<(), String> {
+        let config_path = dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".controlconfig");
+        let toml_string = toml::to_string(self).map_err(|e| e.to_string())?;
+        fs::write(config_path, toml_string).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+// ---------- Вспомогательная функция для парсинга цвета ----------
+fn parse_color_from_config(name: &str) -> Option<Color32> {
+    match name.to_lowercase().as_str() {
+        "black" => Some(Color32::BLACK),
+        "white" => Some(Color32::WHITE),
+        "red" => Some(Color32::RED),
+        "green" => Some(Color32::GREEN),
+        "blue" => Some(Color32::BLUE),
+        "gray" | "grey" => Some(Color32::GRAY),
+        "darkgray" => Some(Color32::DARK_GRAY),
+        "lightgray" => Some(Color32::LIGHT_GRAY),
+        "yellow" => Some(Color32::YELLOW),
+        "cyan" => Some(Color32::from_rgb(0, 255, 255)),
+        "magenta" => Some(Color32::from_rgb(255, 0, 255)),
+        _ => None,
+    }
+}
+
+// ---------- Главная структура приложения ----------
 pub struct TerminalApp {
     output: VecDeque<String>,
     input: String,
@@ -17,23 +95,54 @@ pub struct TerminalApp {
     logger: Logger,
     should_exit: bool,
     input_id: Option<egui::Id>,
+    config: Config,
 }
 
 impl Default for TerminalApp {
     fn default() -> Self {
-        Self {
+        let config = Config::load();
+
+        let bg_color = config
+            .bgcolor
+            .as_deref()
+            .and_then(parse_color_from_config)
+            .unwrap_or(Color32::from_gray(128));
+        let fg_color = config
+            .fgcolor
+            .as_deref()
+            .and_then(parse_color_from_config)
+            .unwrap_or(Color32::WHITE);
+
+        let mut app = Self {
             output: VecDeque::new(),
             input: String::new(),
             history: Vec::new(),
             history_index: None,
             state: TerminalState::new(),
             registry: CommandRegistry::new(),
-            bg_color: Color32::from_gray(128),
-            fg_color: Color32::WHITE,
+            bg_color,
+            fg_color,
             logger: Logger::new(),
             should_exit: false,
             input_id: None,
+            config,
+        };
+
+        // Загружаем алиасы из конфига
+        if let Some(aliases) = &app.config.aliases {
+            for (k, v) in aliases {
+                app.state.aliases.insert(k.clone(), v.clone());
+            }
         }
+
+        // Загружаем переменные окружения из конфига
+        if let Some(env_vars) = &app.config.env {
+            for (k, v) in env_vars {
+                app.state.set_env(k.clone(), v.clone());
+            }
+        }
+
+        app
     }
 }
 
@@ -47,6 +156,28 @@ impl TerminalApp {
         if self.output.len() > 1000 {
             self.output.pop_front();
         }
+    }
+
+    fn save_config(&mut self) {
+        // Обновляем цвета в конфиге
+        self.config.bgcolor = Some(color_to_string(self.bg_color));
+        self.config.fgcolor = Some(color_to_string(self.fg_color));
+
+        // Алиасы
+        let mut aliases_map = HashMap::new();
+        for (k, v) in &self.state.aliases {
+            aliases_map.insert(k.clone(), v.clone());
+        }
+        self.config.aliases = Some(aliases_map);
+
+        // Переменные окружения
+        let mut env_map = HashMap::new();
+        for (k, v) in &self.state.env_vars {
+            env_map.insert(k.clone(), v.clone());
+        }
+        self.config.env = Some(env_map);
+
+        let _ = self.config.save();
     }
 
     fn execute_command(&mut self, command_line: &str) {
@@ -67,6 +198,7 @@ impl TerminalApp {
             return;
         }
 
+        // Проверка на алиас
         if let Some(alias_value) = self.state.aliases.get(&parts[0]) {
             let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
             new_parts.extend(parts.into_iter().skip(1));
@@ -108,6 +240,9 @@ impl TerminalApp {
             }
         }
         self.add_output(String::new()); // пустая строка между командами
+
+        // Сохраняем конфиг (на случай, если команды bgcolor/fgcolor/alias/set изменили состояние)
+        self.save_config();
     }
 }
 
@@ -124,7 +259,7 @@ impl eframe::App for TerminalApp {
                 ui.visuals_mut().override_text_color = Some(self.fg_color);
 
                 ScrollArea::vertical()
-                    .stick_to_bottom(true) // автоматически оставаться внизу, если пользователь не прокрутил вверх
+                    .stick_to_bottom(true)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
@@ -161,42 +296,37 @@ impl eframe::App for TerminalApp {
                             }
                         }
 
-                        // Навигация по истории (стрелки вверх/вниз)
                         // Навигация по истории (только если не зажат Ctrl)
-if response.has_focus() {
-    let input_state = ui.input(|i| i.clone());
-    
-    // Проверяем, зажат ли Ctrl
-    let ctrl_pressed = input_state.modifiers.ctrl;
-    
-    if !ctrl_pressed {
-        // Стрелки работают только без Ctrl
-        if input_state.key_pressed(egui::Key::ArrowUp) {
-            if !self.history.is_empty() {
-                let new_index = match self.history_index {
-                    None => Some(self.history.len() - 1),
-                    Some(0) => Some(0),
-                    Some(i) => Some(i - 1),
-                };
-                if let Some(idx) = new_index {
-                    self.input = self.history[idx].clone();
-                    self.history_index = new_index;
-                }
-            }
-        } else if input_state.key_pressed(egui::Key::ArrowDown) {
-            if let Some(idx) = self.history_index {
-                if idx + 1 < self.history.len() {
-                    self.input = self.history[idx + 1].clone();
-                    self.history_index = Some(idx + 1);
-                } else {
-                    self.input.clear();
-                    self.history_index = None;
-                }
-            }
-        }
-    }
-    // Если Ctrl зажат — ничего не делаем, пусть TextEdit сам обрабатывает
-}
+                        if response.has_focus() {
+                            let input_state = ui.input(|i| i.clone());
+                            let ctrl_pressed = input_state.modifiers.ctrl;
+
+                            if !ctrl_pressed {
+                                if input_state.key_pressed(egui::Key::ArrowUp) {
+                                    if !self.history.is_empty() {
+                                        let new_index = match self.history_index {
+                                            None => Some(self.history.len() - 1),
+                                            Some(0) => Some(0),
+                                            Some(i) => Some(i - 1),
+                                        };
+                                        if let Some(idx) = new_index {
+                                            self.input = self.history[idx].clone();
+                                            self.history_index = new_index;
+                                        }
+                                    }
+                                } else if input_state.key_pressed(egui::Key::ArrowDown) {
+                                    if let Some(idx) = self.history_index {
+                                        if idx + 1 < self.history.len() {
+                                            self.input = self.history[idx + 1].clone();
+                                            self.history_index = Some(idx + 1);
+                                        } else {
+                                            self.input.clear();
+                                            self.history_index = None;
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         // Пустое пространство для прокрутки вниз
                         ui.add_space(50.0);
@@ -209,5 +339,23 @@ if response.has_focus() {
         } else {
             ctx.request_repaint();
         }
+    }
+}
+
+// Вспомогательная функция для преобразования Color32 в строку цвета (для сохранения в конфиг)
+fn color_to_string(color: Color32) -> String {
+    match color {
+        Color32::BLACK => "black".to_string(),
+        Color32::WHITE => "white".to_string(),
+        Color32::RED => "red".to_string(),
+        Color32::GREEN => "green".to_string(),
+        Color32::BLUE => "blue".to_string(),
+        Color32::GRAY => "gray".to_string(),
+        Color32::DARK_GRAY => "darkgray".to_string(),
+        Color32::LIGHT_GRAY => "lightgray".to_string(),
+        Color32::YELLOW => "yellow".to_string(),
+        _ if color == Color32::from_rgb(0, 255, 255) => "cyan".to_string(),
+        _ if color == Color32::from_rgb(255, 0, 255) => "magenta".to_string(),
+        _ => "white".to_string(),
     }
 }
