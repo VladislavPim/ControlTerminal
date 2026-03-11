@@ -13,7 +13,7 @@
 - 🔍 **Command History** — navigate with up/down arrows
 - ⌨️ **Keyboard Shortcuts** — Ctrl+A (select all), Ctrl+C (copy), Ctrl+V (paste)
 - 💾 **Command Logging** — all commands are logged to `.controlllog`
-- 🚀 **Built-in Commands** — 50+ commands for files, processes, network, and system
+- 🚀 **Built-in Commands** — 40+ commands for files, processes, network, and system
 - 📦 **Aliases & Environment Variables** — full support
 - 🧮 **Built-in Calculator** — evaluate expressions directly in the terminal
 - 🔧 **Startup Manager** — manage Windows autostart programs
@@ -168,4 +168,4 @@ cargo build --release
 **Total Commands: 48** (including aliases) 🚀
 
 # Run the terminal
-target\release\ControlTerminal.exe
+ControlTerminal.exe
