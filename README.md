@@ -44,7 +44,7 @@
 ### System Requirements
 - Windows 10/11 (64-bit)
 - 50 MB free disk space
-- 512 MB RAM (1+ GB recommended)
+- 512 MB RAM
 
 ### Download
 1. Download the latest release from the [Releases](https://github.com/VladislavPim/ControlTerminal/releases) page
