@@ -59,6 +59,7 @@ cd ControlTerminal
 
 # Build in release mode
 cargo build --release
+```
 
 # Run the terminal
 target\release\ControlTerminal.exe
