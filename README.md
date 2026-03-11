@@ -70,6 +70,8 @@ cd ControlTerminal
 # Build in release mode
 cargo build --release
 
+
+
 ⌨️ Keyboard Shortcuts
 Shortcut	Action
 Ctrl + A	Select all text in input line
