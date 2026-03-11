@@ -61,5 +61,17 @@ cd ControlTerminal
 cargo build --release
 ```
 
+⌨️ Keyboard Shortcuts
+Shortcut
+Action
+Ctrl + A
+Select all text in input line
+Ctrl + C
+Copy selected text
+Ctrl + V
+Paste text from clipboard
+↑ / ↓
+Navigate command history
+
 # Run the terminal
 target\release\ControlTerminal.exe
