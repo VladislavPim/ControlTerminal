@@ -1,6 +1,6 @@
 # ControlTerminal 🚀
 
-![ControlTerminal Logo](assets/logo.ico)
+![ControlTerminal Screenshot](assets/screenshot.png)
 
 **ControlTerminal** is a modern, lightweight terminal emulator with a graphical interface written in Rust. It combines the familiar command-line interface of Windows CMD with the advanced features of a modern terminal emulator.
 
