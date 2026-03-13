@@ -197,16 +197,19 @@ fn parse_color(name: &str) -> Result<Color32, String> {
 }
 
 pub fn cmd_help(_args: &[String], _ctx: &mut CommandContext) -> Result<String, String> {
-    let help_text = r#"Control Terminal - полный список команд:
-  Навигация: cd, ls, pwd, tree
-  Файлы: cat, echo, cp, mv, rm, mkdir, touch, find, du, df, stat
-  Система: whoami, date, time, sysinfo, uptime, hostname, ps, kill
-  Сеть: ping, ipconfig, netstat, curl
-  Текст: grep, head, tail, wc, sort, uniq
-  Управление: clear, history, alias, set, bgcolor, fgcolor, calc, run
-  Системные: shutdown, reboot
-  Прочее: help, exit
-"#;
+    let help_text = r#"Control Terminal - available commands:
+
+  Navigation: cd, ls, pwd, tree
+  Files: cat, cp, mv, rm, mkdir, touch, find, du, df, stat
+  System: whoami, date, time, sysinfo, uptime, hostname, ps, kill
+  Network: ping, ipconfig, netstat, curl
+  Text: grep, head, tail, wc, sort, uniq, echo, calc
+  Terminal: clear, history, alias, set, bgcolor, fgcolor, run
+  Startup: startup add, startup remove, startup list
+  System: shutdown, reboot
+  Other: help, exit
+
+Type 'help <command>' for more info on a specific command (not implemented yet)."#;
     Ok(help_text.to_string())
 }
 
