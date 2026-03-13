@@ -95,6 +95,8 @@ pub struct TerminalApp {
     logger: Logger,
     should_exit: bool,
     input_id: Option<egui::Id>,
+    focus_requested: bool,      // добавляем
+    scroll_to_bottom: bool,     // добавляем
     config: Config,
 }
 
@@ -125,6 +127,8 @@ impl Default for TerminalApp {
             logger: Logger::new(),
             should_exit: false,
             input_id: None,
+            focus_requested: false,
+            scroll_to_bottom: true,
             config,
         };
 
@@ -141,6 +145,14 @@ impl Default for TerminalApp {
                 app.state.set_env(k.clone(), v.clone());
             }
         }
+
+        // Приветственное сообщение при запуске
+        // Приветственное сообщение при запуске
+app.add_output("Control Terminal v1.0.0".to_string());
+app.add_output("You are using the stable version.".to_string());
+app.add_output("Good luck!".to_string());
+app.add_output("For a full list of commands, type 'help'.".to_string());
+app.add_output(String::new()); // пустая строка для отступа
 
         app
     }
