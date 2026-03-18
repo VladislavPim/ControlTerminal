@@ -109,12 +109,11 @@ pub struct TerminalApp {
     logger: Logger,
     should_exit: bool,
     focus_requested: bool,
-    input_id: Option<egui::Id>,          // ID поля ввода для управления фокусом
+    input_id: Option<egui::Id>,
     config: Config,
-    // Глобальные алиасы и переменные (общие для всех вкладок)
     global_aliases: HashMap<String, String>,
     global_env: HashMap<String, String>,
-    pending_command: Option<String>,      // команда, которую нужно выполнить после отрисовки
+    pending_command: Option<String>,
 }
 
 // Вспомогательная функция для парсинга цвета
@@ -314,7 +313,6 @@ impl eframe::App for TerminalApp {
 
                 // ----- Панель вкладок с белым фоном и чёрным текстом -----
                 ui.horizontal(|ui| {
-                    // Кнопка "+" (стилизуем отдельно, оставим как есть или сделаем белую)
                     if ui.button(" + ").clicked() {
                         self.new_tab();
                     }
@@ -325,15 +323,13 @@ impl eframe::App for TerminalApp {
                     for (i, tab) in self.tabs.iter_mut().enumerate() {
                         let is_active = i == self.active_tab;
 
-                        // Стили для вкладки: белый фон, чёрный текст, активная выделена
                         let (bg_fill, text_color) = if is_active {
-                            (Color32::from_gray(220), Color32::BLACK) // светло-серый фон для активной
+                            (Color32::from_gray(220), Color32::BLACK)
                         } else {
                             (Color32::WHITE, Color32::BLACK)
                         };
 
                         ui.scope(|ui| {
-                            // Настраиваем визуал для этой вкладки
                             ui.visuals_mut().override_text_color = Some(text_color);
                             ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
                             ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::from_gray(200);
@@ -379,7 +375,6 @@ impl eframe::App for TerminalApp {
                 let active_idx = self.active_tab;
                 let mut cmd_to_execute = None;
 
-                // Блок, где мы заимствуем active_tab
                 {
                     let active_tab = &mut self.tabs[active_idx];
 
@@ -408,16 +403,13 @@ impl eframe::App for TerminalApp {
                                 ui.add(text_edit)
                             }).inner;
 
-                            // Сохраняем ID поля ввода для управления фокусом
                             self.input_id = Some(response.id);
 
-                            // Фокус при старте
                             if !self.focus_requested {
                                 ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
                                 self.focus_requested = true;
                             }
 
-                            // Обработка Enter: сохраняем команду для выполнения после ScrollArea
                             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                                 let command = active_tab.input.trim().to_string();
                                 if !command.is_empty() {
@@ -426,7 +418,6 @@ impl eframe::App for TerminalApp {
                                 }
                             }
 
-                            // Навигация по истории
                             if response.has_focus() {
                                 let input_state = ui.input(|i| i.clone());
                                 let ctrl_pressed = input_state.modifiers.ctrl;
@@ -460,15 +451,10 @@ impl eframe::App for TerminalApp {
 
                             ui.add_space(50.0);
                         });
-                } // active_tab выходит из области видимости
+                }
 
-                // Если есть команда, выполняем её и возвращаем фокус
                 if let Some(cmd) = cmd_to_execute {
                     self.execute_command(&cmd);
-                    // Возвращаем фокус на поле ввода после выполнения команды
-                    if let Some(id) = self.input_id {
-                        ctx.memory_mut(|mem| mem.request_focus(id));
-                    }
                 }
 
                 // Горячие клавиши для вкладок
@@ -487,6 +473,14 @@ impl eframe::App for TerminalApp {
                     } else {
                         self.active_tab - 1
                     };
+                }
+
+                // 🔥 Принудительный фокус на поле ввода, если не редактируется заголовок
+                let editing = self.tabs.iter().any(|tab| tab.editing_title);
+                if !editing {
+                    if let Some(id) = self.input_id {
+                        ctx.memory_mut(|mem| mem.request_focus(id));
+                    }
                 }
             });
     }
