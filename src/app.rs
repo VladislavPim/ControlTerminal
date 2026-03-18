@@ -1,7 +1,7 @@
 use crate::commands::CommandRegistry;
 use crate::logger::Logger;
 use crate::terminal::{CommandContext, TerminalState};
-use eframe::egui;
+use eframe::egui
 use egui::{Color32, ScrollArea, TextEdit};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
