@@ -109,11 +109,12 @@ pub struct TerminalApp {
     logger: Logger,
     should_exit: bool,
     focus_requested: bool,
+    input_id: Option<egui::Id>,          // ID поля ввода для управления фокусом
     config: Config,
     // Глобальные алиасы и переменные (общие для всех вкладок)
     global_aliases: HashMap<String, String>,
     global_env: HashMap<String, String>,
-    pending_command: Option<String>, // команда, которую нужно выполнить после отрисовки
+    pending_command: Option<String>,      // команда, которую нужно выполнить после отрисовки
 }
 
 // Вспомогательная функция для парсинга цвета
@@ -159,6 +160,7 @@ impl Default for TerminalApp {
             logger: Logger::new(),
             should_exit: false,
             focus_requested: false,
+            input_id: None,
             config,
             global_aliases: HashMap::new(),
             global_env: HashMap::new(),
@@ -310,8 +312,9 @@ impl eframe::App for TerminalApp {
             .show(ctx, |ui| {
                 ui.visuals_mut().override_text_color = Some(self.fg_color);
 
-                // ----- Панель вкладок -----
+                // ----- Панель вкладок с белым фоном и чёрным текстом -----
                 ui.horizontal(|ui| {
+                    // Кнопка "+" (стилизуем отдельно, оставим как есть или сделаем белую)
                     if ui.button(" + ").clicked() {
                         self.new_tab();
                     }
@@ -321,16 +324,20 @@ impl eframe::App for TerminalApp {
 
                     for (i, tab) in self.tabs.iter_mut().enumerate() {
                         let is_active = i == self.active_tab;
-                        let button_color = if is_active {
-                            self.fg_color
+
+                        // Стили для вкладки: белый фон, чёрный текст, активная выделена
+                        let (bg_fill, text_color) = if is_active {
+                            (Color32::from_gray(220), Color32::BLACK) // светло-серый фон для активной
                         } else {
-                            self.bg_color.linear_multiply(0.7)
+                            (Color32::WHITE, Color32::BLACK)
                         };
 
                         ui.scope(|ui| {
-                            ui.visuals_mut().override_text_color = Some(button_color);
-                            ui.style_mut().visuals.widgets.inactive.bg_fill = self.bg_color;
-                            ui.style_mut().visuals.widgets.hovered.bg_fill = self.bg_color.linear_multiply(1.2);
+                            // Настраиваем визуал для этой вкладки
+                            ui.visuals_mut().override_text_color = Some(text_color);
+                            ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
+                            ui.style_mut().visuals.widgets.hovered.bg_fill = Color32::from_gray(200);
+                            ui.style_mut().visuals.widgets.active.bg_fill = Color32::from_gray(210);
 
                             if tab.editing_title {
                                 let response = ui.text_edit_singleline(&mut tab.temp_title);
@@ -370,8 +377,9 @@ impl eframe::App for TerminalApp {
 
                 // ----- Содержимое активной вкладки -----
                 let active_idx = self.active_tab;
-                // Извлекаем mutable ссылку на активную вкладку, но не надолго
                 let mut cmd_to_execute = None;
+
+                // Блок, где мы заимствуем active_tab
                 {
                     let active_tab = &mut self.tabs[active_idx];
 
@@ -400,12 +408,16 @@ impl eframe::App for TerminalApp {
                                 ui.add(text_edit)
                             }).inner;
 
+                            // Сохраняем ID поля ввода для управления фокусом
+                            self.input_id = Some(response.id);
+
+                            // Фокус при старте
                             if !self.focus_requested {
                                 ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
                                 self.focus_requested = true;
                             }
 
-                            // Обработка Enter: сохраняем команду в переменную, чтобы выполнить позже
+                            // Обработка Enter: сохраняем команду для выполнения после ScrollArea
                             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                                 let command = active_tab.input.trim().to_string();
                                 if !command.is_empty() {
@@ -450,9 +462,13 @@ impl eframe::App for TerminalApp {
                         });
                 } // active_tab выходит из области видимости
 
-                // Если есть команда, выполним её после завершения scroll_area
+                // Если есть команда, выполняем её и возвращаем фокус
                 if let Some(cmd) = cmd_to_execute {
                     self.execute_command(&cmd);
+                    // Возвращаем фокус на поле ввода после выполнения команды
+                    if let Some(id) = self.input_id {
+                        ctx.memory_mut(|mem| mem.request_focus(id));
+                    }
                 }
 
                 // Горячие клавиши для вкладок
