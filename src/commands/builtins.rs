@@ -1,7 +1,6 @@
 use crate::terminal::CommandContext;
 use egui::Color32;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 use std::process::Command;
