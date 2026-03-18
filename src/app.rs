@@ -1,8 +1,8 @@
 use crate::commands::CommandRegistry;
 use crate::logger::Logger;
 use crate::terminal::{CommandContext, TerminalState};
-use eframe::egui
-use egui::{Color32, ScrollArea, TextEdit};
+use eframe::egui;
+use egui::{Color32, ScrollArea, TextEdit, Id};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -64,7 +64,59 @@ impl Config {
     }
 }
 
-// ---------- Вспомогательная функция для парсинга цвета ----------
+// ---------- Структура одной вкладки ----------
+pub struct TerminalTab {
+    pub output: VecDeque<String>,
+    pub input: String,
+    pub history: Vec<String>,
+    pub history_index: Option<usize>,
+    pub current_dir: PathBuf,
+    pub title: String,
+    pub editing_title: bool,
+    pub temp_title: String,
+}
+
+impl TerminalTab {
+    pub fn new(initial_dir: PathBuf) -> Self {
+        let dir_display = initial_dir.display().to_string();
+        Self {
+            output: VecDeque::new(),
+            input: String::new(),
+            history: Vec::new(),
+            history_index: None,
+            current_dir: initial_dir,
+            title: dir_display,
+            editing_title: false,
+            temp_title: String::new(),
+        }
+    }
+
+    pub fn add_output(&mut self, line: String) {
+        self.output.push_back(line);
+        if self.output.len() > 1000 {
+            self.output.pop_front();
+        }
+    }
+}
+
+// ---------- Главная структура приложения ----------
+pub struct TerminalApp {
+    tabs: Vec<TerminalTab>,
+    active_tab: usize,
+    bg_color: Color32,
+    fg_color: Color32,
+    registry: CommandRegistry,
+    logger: Logger,
+    should_exit: bool,
+    input_id: Option<egui::Id>,
+    focus_requested: bool,
+    config: Config,
+    // Глобальные алиасы и переменные (общие для всех вкладок)
+    global_aliases: HashMap<String, String>,
+    global_env: HashMap<String, String>,
+}
+
+// Вспомогательная функция для парсинга цвета
 fn parse_color_from_config(name: &str) -> Option<Color32> {
     match name.to_lowercase().as_str() {
         "black" => Some(Color32::BLACK),
@@ -82,24 +134,6 @@ fn parse_color_from_config(name: &str) -> Option<Color32> {
     }
 }
 
-// ---------- Главная структура приложения ----------
-pub struct TerminalApp {
-    output: VecDeque<String>,
-    input: String,
-    history: Vec<String>,
-    history_index: Option<usize>,
-    state: TerminalState,
-    registry: CommandRegistry,
-    bg_color: Color32,
-    fg_color: Color32,
-    logger: Logger,
-    should_exit: bool,
-    input_id: Option<egui::Id>,
-    focus_requested: bool,      // добавляем
-    scroll_to_bottom: bool,     // добавляем
-    config: Config,
-}
-
 impl Default for TerminalApp {
     fn default() -> Self {
         let config = Config::load();
@@ -115,44 +149,43 @@ impl Default for TerminalApp {
             .and_then(parse_color_from_config)
             .unwrap_or(Color32::WHITE);
 
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         let mut app = Self {
-            output: VecDeque::new(),
-            input: String::new(),
-            history: Vec::new(),
-            history_index: None,
-            state: TerminalState::new(),
-            registry: CommandRegistry::new(),
+            tabs: vec![TerminalTab::new(home)],
+            active_tab: 0,
             bg_color,
             fg_color,
+            registry: CommandRegistry::new(),
             logger: Logger::new(),
             should_exit: false,
             input_id: None,
             focus_requested: false,
-            scroll_to_bottom: true,
             config,
+            global_aliases: HashMap::new(),
+            global_env: HashMap::new(),
         };
 
-        // Загружаем алиасы из конфига
+        // Загружаем алиасы из конфига в глобальные
         if let Some(aliases) = &app.config.aliases {
             for (k, v) in aliases {
-                app.state.aliases.insert(k.clone(), v.clone());
+                app.global_aliases.insert(k.clone(), v.clone());
             }
         }
 
-        // Загружаем переменные окружения из конфига
+        // Загружаем переменные окружения
         if let Some(env_vars) = &app.config.env {
             for (k, v) in env_vars {
-                app.state.set_env(k.clone(), v.clone());
+                app.global_env.insert(k.clone(), v.clone());
+                std::env::set_var(k, v); // устанавливаем в реальное окружение
             }
         }
 
-        // Приветственное сообщение при запуске
-        // Приветственное сообщение при запуске
-app.add_output("Control Terminal v1.0.0".to_string());
-app.add_output("You are using the stable version.".to_string());
-app.add_output("Good luck!".to_string());
-app.add_output("For a full list of commands, type 'help'.".to_string());
-app.add_output(String::new()); // пустая строка для отступа
+        // Приветственное сообщение в первой вкладке
+        app.tabs[0].add_output("Control Terminal v1.1".to_string());
+        app.tabs[0].add_output("You are using the stable version.".to_string());
+        app.tabs[0].add_output("Good luck!".to_string());
+        app.tabs[0].add_output("For a full list of commands, type 'help'.".to_string());
+        app.tabs[0].add_output(String::new());
 
         app
     }
@@ -163,55 +196,31 @@ impl TerminalApp {
         Self::default()
     }
 
-    fn add_output(&mut self, line: String) {
-        self.output.push_back(line);
-        if self.output.len() > 1000 {
-            self.output.pop_front();
-        }
-    }
-
-    fn save_config(&mut self) {
-        // Обновляем цвета в конфиге
-        self.config.bgcolor = Some(color_to_string(self.bg_color));
-        self.config.fgcolor = Some(color_to_string(self.fg_color));
-
-        // Алиасы
-        let mut aliases_map = HashMap::new();
-        for (k, v) in &self.state.aliases {
-            aliases_map.insert(k.clone(), v.clone());
-        }
-        self.config.aliases = Some(aliases_map);
-
-        // Переменные окружения
-        let mut env_map = HashMap::new();
-        for (k, v) in &self.state.env_vars {
-            env_map.insert(k.clone(), v.clone());
-        }
-        self.config.env = Some(env_map);
-
-        let _ = self.config.save();
+    fn active_tab(&mut self) -> &mut TerminalTab {
+        &mut self.tabs[self.active_tab]
     }
 
     fn execute_command(&mut self, command_line: &str) {
         self.logger.log_command(command_line);
-        self.history.push(command_line.to_string());
-        self.history_index = None;
+        let active_tab = self.active_tab();
+        active_tab.history.push(command_line.to_string());
+        active_tab.history_index = None;
 
         let trimmed = command_line.trim();
         if trimmed.is_empty() {
             return;
         }
 
-        let prompt = format!("{}> ", self.state.current_dir.display());
-        self.add_output(format!("{}{}", prompt, command_line));
+        let prompt = format!("{}> ", active_tab.current_dir.display());
+        active_tab.add_output(format!("{}{}", prompt, command_line));
 
         let mut parts: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
         if parts.is_empty() {
             return;
         }
 
-        // Проверка на алиас
-        if let Some(alias_value) = self.state.aliases.get(&parts[0]) {
+        // Проверка на глобальные алиасы
+        if let Some(alias_value) = self.global_aliases.get(&parts[0]) {
             let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
             new_parts.extend(parts.into_iter().skip(1));
             parts = new_parts;
@@ -223,13 +232,21 @@ impl TerminalApp {
         let cmd_fn = match self.registry.get(&cmd_name) {
             Some(f) => f,
             None => {
-                self.add_output(format!("Unknown command: {}", cmd_name));
+                active_tab.add_output(format!("Unknown command: {}", cmd_name));
                 return;
             }
         };
 
+        // Создаём временное состояние для команды, передавая ссылки на глобальные алиасы и env
+        // Но текущая директория — из активной вкладки
+        let mut state = TerminalState {
+            current_dir: active_tab.current_dir.clone(),
+            aliases: self.global_aliases.clone(), // копия для команды (если команда их изменит, нужно будет синхронизировать)
+            env_vars: self.global_env.clone(),
+        };
+
         let mut ctx = CommandContext {
-            state: &mut self.state,
+            state: &mut state,
             bg_color: &mut self.bg_color,
             fg_color: &mut self.fg_color,
             logger: &mut self.logger,
@@ -240,21 +257,52 @@ impl TerminalApp {
                 if output == "\x18EXIT\x18" {
                     self.should_exit = true;
                 } else if output == "\x1b[2J\x1b[1;1H" {
-                    self.output.clear();
+                    active_tab.output.clear();
                 } else {
                     for line in output.lines() {
-                        self.add_output(line.to_string());
+                        active_tab.add_output(line.to_string());
                     }
                 }
+                // Обновляем состояние вкладки и глобальные переменные, если команда их изменила
+                active_tab.current_dir = state.current_dir;
+                self.global_aliases = state.aliases;
+                self.global_env = state.env_vars;
+                // Обновляем конфиг, если что-то изменилось (например, alias или set)
+                self.save_config();
             }
             Err(err) => {
-                self.add_output(format!("Error: {}", err));
+                active_tab.add_output(format!("Error: {}", err));
             }
         }
-        self.add_output(String::new()); // пустая строка между командами
+        active_tab.add_output(String::new()); // пустая строка между командами
+    }
 
-        // Сохраняем конфиг (на случай, если команды bgcolor/fgcolor/alias/set изменили состояние)
-        self.save_config();
+    fn save_config(&mut self) {
+        self.config.bgcolor = Some(color_to_string(self.bg_color));
+        self.config.fgcolor = Some(color_to_string(self.fg_color));
+        self.config.aliases = Some(self.global_aliases.clone());
+        self.config.env = Some(self.global_env.clone());
+        let _ = self.config.save();
+    }
+
+    fn new_tab(&mut self) {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let mut new_tab = TerminalTab::new(home);
+        new_tab.add_output("Control Terminal v1.1".to_string());
+        new_tab.add_output("New tab opened.".to_string());
+        new_tab.add_output(String::new());
+        self.tabs.push(new_tab);
+        self.active_tab = self.tabs.len() - 1;
+    }
+
+    fn close_tab(&mut self, index: usize) {
+        if self.tabs.len() <= 1 {
+            return; // нельзя закрыть последнюю вкладку
+        }
+        self.tabs.remove(index);
+        if self.active_tab >= index && self.active_tab > 0 {
+            self.active_tab -= 1;
+        }
     }
 }
 
@@ -270,14 +318,77 @@ impl eframe::App for TerminalApp {
             .show(ctx, |ui| {
                 ui.visuals_mut().override_text_color = Some(self.fg_color);
 
+                // ----- Панель вкладок -----
+                ui.horizontal(|ui| {
+                    // Кнопка "+" для новой вкладки
+                    if ui.button(" + ").clicked() {
+                        self.new_tab();
+                    }
+
+                    // Отображаем все вкладки
+                    let mut to_close = None;
+                    for (i, tab) in self.tabs.iter_mut().enumerate() {
+                        let is_active = i == self.active_tab;
+                        let button_color = if is_active {
+                            self.fg_color
+                        } else {
+                            self.bg_color.linear_multiply(0.7)
+                        };
+
+                        ui.scope(|ui| {
+                            ui.visuals_mut().override_text_color = Some(button_color);
+                            ui.style_mut().visuals.widgets.inactive.bg_fill = self.bg_color;
+                            ui.style_mut().visuals.widgets.hovered.bg_fill = self.bg_color.linear_multiply(1.2);
+
+                            // Редактирование заголовка вкладки
+                            if tab.editing_title {
+                                let response = ui.text_edit_singleline(&mut tab.temp_title);
+                                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                    if !tab.temp_title.is_empty() {
+                                        tab.title = tab.temp_title.clone();
+                                    }
+                                    tab.editing_title = false;
+                                }
+                                if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                                    tab.editing_title = false;
+                                }
+                            } else {
+                                // Обычная кнопка вкладки
+                                let label = format!(" 📁 {} ", tab.title);
+                                let button = ui.button(label);
+                                if button.clicked() {
+                                    self.active_tab = i;
+                                }
+                                if button.double_clicked() {
+                                    tab.editing_title = true;
+                                    tab.temp_title = tab.title.clone();
+                                }
+                            }
+                        });
+
+                        // Кнопка закрытия вкладки
+                        if self.tabs.len() > 1 && ui.button(" ✕ ").clicked() {
+                            to_close = Some(i);
+                        }
+                    }
+
+                    if let Some(index) = to_close {
+                        self.close_tab(index);
+                    }
+                });
+
+                ui.separator();
+
+                // ----- Содержимое активной вкладки -----
+                let active_tab = self.active_tab();
+
                 ScrollArea::vertical()
                     .stick_to_bottom(true)
                     .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
 
-                        // Вывод истории
-                        for line in &self.output {
+                        for line in &active_tab.output {
                             ui.label(line);
                         }
 
@@ -285,10 +396,10 @@ impl eframe::App for TerminalApp {
 
                         // Строка ввода
                         let response = ui.horizontal(|ui| {
-                            let prompt = format!("{}> ", self.state.current_dir.display());
+                            let prompt = format!("{}> ", active_tab.current_dir.display());
                             ui.label(prompt);
 
-                            let text_edit = TextEdit::singleline(&mut self.input)
+                            let text_edit = TextEdit::singleline(&mut active_tab.input)
                                 .desired_width(f32::INFINITY)
                                 .text_color(self.fg_color)
                                 .font(egui::TextStyle::Monospace)
@@ -299,62 +410,80 @@ impl eframe::App for TerminalApp {
 
                         self.input_id = Some(response.id);
 
-                        // Обработка Enter
-                        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                            let command = self.input.trim().to_string();
-                            if !command.is_empty() {
-                                self.execute_command(&command);
-                                self.input.clear();
-                            }
+                        // Фокус при старте
+                        if !self.focus_requested {
+                            ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
+                            self.focus_requested = true;
                         }
 
-                        // Навигация по истории (только если не зажат Ctrl)
+                        // Обработка Enter
+                        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            let command = active_tab.input.trim().to_string();
+                            if !command.is_empty() {
+                                self.execute_command(&command);
+                                active_tab.input.clear();
+                            }
+                            response.request_focus();
+                        }
+
+                        // Навигация по истории (без Ctrl)
                         if response.has_focus() {
                             let input_state = ui.input(|i| i.clone());
                             let ctrl_pressed = input_state.modifiers.ctrl;
 
                             if !ctrl_pressed {
                                 if input_state.key_pressed(egui::Key::ArrowUp) {
-                                    if !self.history.is_empty() {
-                                        let new_index = match self.history_index {
-                                            None => Some(self.history.len() - 1),
+                                    if !active_tab.history.is_empty() {
+                                        let new_index = match active_tab.history_index {
+                                            None => Some(active_tab.history.len() - 1),
                                             Some(0) => Some(0),
                                             Some(i) => Some(i - 1),
                                         };
                                         if let Some(idx) = new_index {
-                                            self.input = self.history[idx].clone();
-                                            self.history_index = new_index;
+                                            active_tab.input = active_tab.history[idx].clone();
+                                            active_tab.history_index = new_index;
                                         }
                                     }
                                 } else if input_state.key_pressed(egui::Key::ArrowDown) {
-                                    if let Some(idx) = self.history_index {
-                                        if idx + 1 < self.history.len() {
-                                            self.input = self.history[idx + 1].clone();
-                                            self.history_index = Some(idx + 1);
+                                    if let Some(idx) = active_tab.history_index {
+                                        if idx + 1 < active_tab.history.len() {
+                                            active_tab.input = active_tab.history[idx + 1].clone();
+                                            active_tab.history_index = Some(idx + 1);
                                         } else {
-                                            self.input.clear();
-                                            self.history_index = None;
+                                            active_tab.input.clear();
+                                            active_tab.history_index = None;
                                         }
                                     }
                                 }
                             }
                         }
 
-                        // Пустое пространство для прокрутки вниз
-                        ui.add_space(50.0);
+                        ui.add_space(50.0); // пространство для скролла
                     });
-            });
 
-        // Принудительный фокус на поле ввода всегда
-        if let Some(id) = self.input_id {
-            ctx.memory_mut(|mem| mem.request_focus(id));
-        } else {
-            ctx.request_repaint();
-        }
+                // Глобальные горячие клавиши для вкладок
+                if ui.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl) {
+                    self.new_tab();
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::W) && i.modifiers.ctrl) && self.tabs.len() > 1 {
+                    self.close_tab(self.active_tab);
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl && !i.modifiers.shift) {
+                    // Ctrl+Tab: следующая вкладка
+                    self.active_tab = (self.active_tab + 1) % self.tabs.len();
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl && i.modifiers.shift) {
+                    // Ctrl+Shift+Tab: предыдущая вкладка
+                    self.active_tab = if self.active_tab == 0 {
+                        self.tabs.len() - 1
+                    } else {
+                        self.active_tab - 1
+                    };
+                }
+            });
     }
 }
 
-// Вспомогательная функция для преобразования Color32 в строку цвета (для сохранения в конфиг)
 fn color_to_string(color: Color32) -> String {
     match color {
         Color32::BLACK => "black".to_string(),
