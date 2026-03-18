@@ -113,6 +113,7 @@ pub struct TerminalApp {
     // Глобальные алиасы и переменные (общие для всех вкладок)
     global_aliases: HashMap<String, String>,
     global_env: HashMap<String, String>,
+    pending_command: Option<String>, // команда, которую нужно выполнить после отрисовки
 }
 
 // Вспомогательная функция для парсинга цвета
@@ -161,6 +162,7 @@ impl Default for TerminalApp {
             config,
             global_aliases: HashMap::new(),
             global_env: HashMap::new(),
+            pending_command: None,
         };
 
         // Загружаем алиасы из конфига в глобальные
@@ -174,7 +176,7 @@ impl Default for TerminalApp {
         if let Some(env_vars) = &app.config.env {
             for (k, v) in env_vars {
                 app.global_env.insert(k.clone(), v.clone());
-                std::env::set_var(k, v); // устанавливаем в реальное окружение
+                std::env::set_var(k, v);
             }
         }
 
@@ -214,7 +216,7 @@ impl TerminalApp {
 
     fn close_tab(&mut self, index: usize) {
         if self.tabs.len() <= 1 {
-            return; // нельзя закрыть последнюю вкладку
+            return;
         }
         self.tabs.remove(index);
         if self.active_tab >= index && self.active_tab > 0 {
@@ -222,7 +224,6 @@ impl TerminalApp {
         }
     }
 
-    // Исправленная функция execute_command
     fn execute_command(&mut self, command_line: &str) {
         self.logger.log_command(command_line);
         let active_idx = self.active_tab;
@@ -260,7 +261,6 @@ impl TerminalApp {
             }
         };
 
-        // Создаём временное состояние
         let mut state = TerminalState {
             current_dir: self.tabs[active_idx].current_dir.clone(),
             aliases: self.global_aliases.clone(),
@@ -285,7 +285,6 @@ impl TerminalApp {
                         self.tabs[active_idx].add_output(line.to_string());
                     }
                 }
-                // Обновляем состояние вкладки и глобальные переменные
                 self.tabs[active_idx].current_dir = state.current_dir;
                 self.global_aliases = state.aliases;
                 self.global_env = state.env_vars;
@@ -295,7 +294,7 @@ impl TerminalApp {
                 self.tabs[active_idx].add_output(format!("Error: {}", err));
             }
         }
-        self.tabs[active_idx].add_output(String::new()); // пустая строка между командами
+        self.tabs[active_idx].add_output(String::new());
     }
 }
 
@@ -313,12 +312,10 @@ impl eframe::App for TerminalApp {
 
                 // ----- Панель вкладок -----
                 ui.horizontal(|ui| {
-                    // Кнопка "+" для новой вкладки
                     if ui.button(" + ").clicked() {
                         self.new_tab();
                     }
 
-                    // Сохраняем длину вкладок до итерации
                     let tabs_len = self.tabs.len();
                     let mut to_close = None;
 
@@ -335,7 +332,6 @@ impl eframe::App for TerminalApp {
                             ui.style_mut().visuals.widgets.inactive.bg_fill = self.bg_color;
                             ui.style_mut().visuals.widgets.hovered.bg_fill = self.bg_color.linear_multiply(1.2);
 
-                            // Редактирование заголовка вкладки
                             if tab.editing_title {
                                 let response = ui.text_edit_singleline(&mut tab.temp_title);
                                 if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
@@ -348,7 +344,6 @@ impl eframe::App for TerminalApp {
                                     tab.editing_title = false;
                                 }
                             } else {
-                                // Обычная кнопка вкладки
                                 let label = format!(" 📁 {} ", tab.title);
                                 let button = ui.button(label);
                                 if button.clicked() {
@@ -361,7 +356,6 @@ impl eframe::App for TerminalApp {
                             }
                         });
 
-                        // Кнопка закрытия вкладки (только если вкладок > 1)
                         if tabs_len > 1 && ui.button(" ✕ ").clicked() {
                             to_close = Some(i);
                         }
@@ -376,8 +370,8 @@ impl eframe::App for TerminalApp {
 
                 // ----- Содержимое активной вкладки -----
                 let active_idx = self.active_tab;
-                // Временно извлекаем mutable ссылку на активную вкладку, чтобы работать с ней
-                // но будем осторожны, чтобы не блокировать self надолго
+                // Извлекаем mutable ссылку на активную вкладку, но не надолго
+                let mut cmd_to_execute = None;
                 {
                     let active_tab = &mut self.tabs[active_idx];
 
@@ -393,7 +387,6 @@ impl eframe::App for TerminalApp {
 
                             ui.add_space(2.0);
 
-                            // Строка ввода
                             let response = ui.horizontal(|ui| {
                                 let prompt = format!("{}> ", active_tab.current_dir.display());
                                 ui.label(prompt);
@@ -407,36 +400,21 @@ impl eframe::App for TerminalApp {
                                 ui.add(text_edit)
                             }).inner;
 
-                            // Фокус при старте
                             if !self.focus_requested {
                                 ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
                                 self.focus_requested = true;
                             }
 
-                            // Обработка Enter
+                            // Обработка Enter: сохраняем команду в переменную, чтобы выполнить позже
                             if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                                 let command = active_tab.input.trim().to_string();
                                 if !command.is_empty() {
-                                    // Здесь мы не можем вызвать self.execute_command напрямую,
-                                    // потому что у нас есть active_tab (mutable ссылка на self.tabs).
-                                    // Выход: сохраняем команду и обработаем после закрытия scroll area.
-                                    // Для простоты скопируем команду и обработаем после.
-                                    let cmd = command.clone();
+                                    cmd_to_execute = Some(command.clone());
                                     active_tab.input.clear();
-                                    // Но execute_command требует &mut self, а у нас есть active_tab.
-                                    // Можно временно отпустить active_tab, но в замыкании это сложно.
-                                    // Альтернатива: передать команду через канал или обработать после show.
-                                    // Пока сделаем так: отпустим active_tab перед вызовом execute_command.
-                                    // Для этого нужно выйти из области видимости active_tab.
-                                    // Сделаем это после show, используя захваченную команду.
-                                    // Положим команду в переменную и обработаем позже.
-                                    drop(active_tab); // освобождаем заимствование
-                                    self.execute_command(&cmd);
-                                    return; // после execute_command нужно перерисовать, но мы вернёмся в update
                                 }
                             }
 
-                            // Навигация по истории (без Ctrl)
+                            // Навигация по истории
                             if response.has_focus() {
                                 let input_state = ui.input(|i| i.clone());
                                 let ctrl_pressed = input_state.modifiers.ctrl;
@@ -468,11 +446,16 @@ impl eframe::App for TerminalApp {
                                 }
                             }
 
-                            ui.add_space(50.0); // пространство для скролла
+                            ui.add_space(50.0);
                         });
-                } // active_tab выходит из области видимости здесь
+                } // active_tab выходит из области видимости
 
-                // Глобальные горячие клавиши для вкладок
+                // Если есть команда, выполним её после завершения scroll_area
+                if let Some(cmd) = cmd_to_execute {
+                    self.execute_command(&cmd);
+                }
+
+                // Горячие клавиши для вкладок
                 if ui.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl) {
                     self.new_tab();
                 }
@@ -480,11 +463,9 @@ impl eframe::App for TerminalApp {
                     self.close_tab(self.active_tab);
                 }
                 if ui.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl && !i.modifiers.shift) {
-                    // Ctrl+Tab: следующая вкладка
                     self.active_tab = (self.active_tab + 1) % self.tabs.len();
                 }
                 if ui.input(|i| i.key_pressed(egui::Key::Tab) && i.modifiers.ctrl && i.modifiers.shift) {
-                    // Ctrl+Shift+Tab: предыдущая вкладка
                     self.active_tab = if self.active_tab == 0 {
                         self.tabs.len() - 1
                     } else {
