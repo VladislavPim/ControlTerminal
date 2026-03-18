@@ -2,7 +2,7 @@ use crate::commands::CommandRegistry;
 use crate::logger::Logger;
 use crate::terminal::{CommandContext, TerminalState};
 use eframe::egui;
-use egui::{Color32, ScrollArea, TextEdit, Id};
+use egui::{Color32, ScrollArea, TextEdit};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fs;
@@ -108,7 +108,6 @@ pub struct TerminalApp {
     registry: CommandRegistry,
     logger: Logger,
     should_exit: bool,
-    input_id: Option<egui::Id>,
     focus_requested: bool,
     config: Config,
     // Глобальные алиасы и переменные (общие для всех вкладок)
@@ -158,7 +157,6 @@ impl Default for TerminalApp {
             registry: CommandRegistry::new(),
             logger: Logger::new(),
             should_exit: false,
-            input_id: None,
             focus_requested: false,
             config,
             global_aliases: HashMap::new(),
@@ -196,93 +194,6 @@ impl TerminalApp {
         Self::default()
     }
 
-    fn active_tab(&mut self) -> &mut TerminalTab {
-        &mut self.tabs[self.active_tab]
-    }
-
-    fn execute_command(&mut self, command_line: &str) {
-    self.logger.log_command(command_line);
-    let command = command_line.to_string();
-
-    // Получаем индекс активной вкладки и её данные (клонируем то, что нужно для команды)
-    let active_idx = self.active_tab;
-    let current_dir = self.tabs[active_idx].current_dir.clone();
-    let history = &mut self.tabs[active_idx].history;
-    let history_index = &mut self.tabs[active_idx].history_index;
-    let output = &mut self.tabs[active_idx].output;
-
-    history.push(command.clone());
-    *history_index = None;
-
-    let trimmed = command.trim();
-    if trimmed.is_empty() {
-        return;
-    }
-
-    let prompt = format!("{}> ", current_dir.display());
-    output.push_back(format!("{}{}", prompt, command));
-
-    let mut parts: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
-    if parts.is_empty() {
-        return;
-    }
-
-    // Проверка на глобальные алиасы
-    if let Some(alias_value) = self.global_aliases.get(&parts[0]) {
-        let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
-        new_parts.extend(parts.into_iter().skip(1));
-        parts = new_parts;
-    }
-
-    let cmd_name = parts[0].clone();
-    let args = parts;
-
-    let cmd_fn = match self.registry.get(&cmd_name) {
-        Some(f) => f,
-        None => {
-            output.push_back(format!("Unknown command: {}", cmd_name));
-            return;
-        }
-    };
-
-    // Создаём состояние для команды
-    let mut state = TerminalState {
-        current_dir: current_dir.clone(),
-        aliases: self.global_aliases.clone(),
-        env_vars: self.global_env.clone(),
-    };
-
-    let mut ctx = CommandContext {
-        state: &mut state,
-        bg_color: &mut self.bg_color,
-        fg_color: &mut self.fg_color,
-        logger: &mut self.logger,
-    };
-
-    match cmd_fn(&args, &mut ctx) {
-        Ok(output_text) => {
-            if output_text == "\x18EXIT\x18" {
-                self.should_exit = true;
-            } else if output_text == "\x1b[2J\x1b[1;1H" {
-                output.clear();
-            } else {
-                for line in output_text.lines() {
-                    output.push_back(line.to_string());
-                }
-            }
-            // Обновляем состояние
-            self.tabs[active_idx].current_dir = state.current_dir;
-            self.global_aliases = state.aliases;
-            self.global_env = state.env_vars;
-            self.save_config();
-        }
-        Err(err) => {
-            output.push_back(format!("Error: {}", err));
-        }
-    }
-    output.push_back(String::new()); // пустая строка между командами
-}
-
     fn save_config(&mut self) {
         self.config.bgcolor = Some(color_to_string(self.bg_color));
         self.config.fgcolor = Some(color_to_string(self.fg_color));
@@ -310,6 +221,82 @@ impl TerminalApp {
             self.active_tab -= 1;
         }
     }
+
+    // Исправленная функция execute_command
+    fn execute_command(&mut self, command_line: &str) {
+        self.logger.log_command(command_line);
+        let active_idx = self.active_tab;
+        self.tabs[active_idx].history.push(command_line.to_string());
+        self.tabs[active_idx].history_index = None;
+
+        let trimmed = command_line.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+
+        let prompt = format!("{}> ", self.tabs[active_idx].current_dir.display());
+        self.tabs[active_idx].add_output(format!("{}{}", prompt, command_line));
+
+        let mut parts: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
+        if parts.is_empty() {
+            return;
+        }
+
+        // Проверка на глобальные алиасы
+        if let Some(alias_value) = self.global_aliases.get(&parts[0]) {
+            let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
+            new_parts.extend(parts.into_iter().skip(1));
+            parts = new_parts;
+        }
+
+        let cmd_name = parts[0].clone();
+        let args = parts;
+
+        let cmd_fn = match self.registry.get(&cmd_name) {
+            Some(f) => f,
+            None => {
+                self.tabs[active_idx].add_output(format!("Unknown command: {}", cmd_name));
+                return;
+            }
+        };
+
+        // Создаём временное состояние
+        let mut state = TerminalState {
+            current_dir: self.tabs[active_idx].current_dir.clone(),
+            aliases: self.global_aliases.clone(),
+            env_vars: self.global_env.clone(),
+        };
+
+        let mut ctx = CommandContext {
+            state: &mut state,
+            bg_color: &mut self.bg_color,
+            fg_color: &mut self.fg_color,
+            logger: &mut self.logger,
+        };
+
+        match cmd_fn(&args, &mut ctx) {
+            Ok(output) => {
+                if output == "\x18EXIT\x18" {
+                    self.should_exit = true;
+                } else if output == "\x1b[2J\x1b[1;1H" {
+                    self.tabs[active_idx].output.clear();
+                } else {
+                    for line in output.lines() {
+                        self.tabs[active_idx].add_output(line.to_string());
+                    }
+                }
+                // Обновляем состояние вкладки и глобальные переменные
+                self.tabs[active_idx].current_dir = state.current_dir;
+                self.global_aliases = state.aliases;
+                self.global_env = state.env_vars;
+                self.save_config();
+            }
+            Err(err) => {
+                self.tabs[active_idx].add_output(format!("Error: {}", err));
+            }
+        }
+        self.tabs[active_idx].add_output(String::new()); // пустая строка между командами
+    }
 }
 
 impl eframe::App for TerminalApp {
@@ -331,8 +318,10 @@ impl eframe::App for TerminalApp {
                         self.new_tab();
                     }
 
-                    // Отображаем все вкладки
+                    // Сохраняем длину вкладок до итерации
+                    let tabs_len = self.tabs.len();
                     let mut to_close = None;
+
                     for (i, tab) in self.tabs.iter_mut().enumerate() {
                         let is_active = i == self.active_tab;
                         let button_color = if is_active {
@@ -372,8 +361,8 @@ impl eframe::App for TerminalApp {
                             }
                         });
 
-                        // Кнопка закрытия вкладки
-                        if self.tabs.len() > 1 && ui.button(" ✕ ").clicked() {
+                        // Кнопка закрытия вкладки (только если вкладок > 1)
+                        if tabs_len > 1 && ui.button(" ✕ ").clicked() {
                             to_close = Some(i);
                         }
                     }
@@ -386,86 +375,102 @@ impl eframe::App for TerminalApp {
                 ui.separator();
 
                 // ----- Содержимое активной вкладки -----
-                let active_tab = self.active_tab();
+                let active_idx = self.active_tab;
+                // Временно извлекаем mutable ссылку на активную вкладку, чтобы работать с ней
+                // но будем осторожны, чтобы не блокировать self надолго
+                {
+                    let active_tab = &mut self.tabs[active_idx];
 
-                ScrollArea::vertical()
-                    .stick_to_bottom(true)
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
+                    ScrollArea::vertical()
+                        .stick_to_bottom(true)
+                        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
 
-                        for line in &active_tab.output {
-                            ui.label(line);
-                        }
-
-                        ui.add_space(2.0);
-
-                        // Строка ввода
-                        let response = ui.horizontal(|ui| {
-                            let prompt = format!("{}> ", active_tab.current_dir.display());
-                            ui.label(prompt);
-
-                            let text_edit = TextEdit::singleline(&mut active_tab.input)
-                                .desired_width(f32::INFINITY)
-                                .text_color(self.fg_color)
-                                .font(egui::TextStyle::Monospace)
-                                .frame(false);
-
-                            ui.add(text_edit)
-                        }).inner;
-
-                        self.input_id = Some(response.id);
-
-                        // Фокус при старте
-                        if !self.focus_requested {
-                            ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
-                            self.focus_requested = true;
-                        }
-
-                        // Обработка Enter
-                        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                            let command = active_tab.input.trim().to_string();
-                            if !command.is_empty() {
-                                self.execute_command(&command);
-                                active_tab.input.clear();
+                            for line in &active_tab.output {
+                                ui.label(line);
                             }
-                            response.request_focus();
-                        }
 
-                        // Навигация по истории (без Ctrl)
-                        if response.has_focus() {
-                            let input_state = ui.input(|i| i.clone());
-                            let ctrl_pressed = input_state.modifiers.ctrl;
+                            ui.add_space(2.0);
 
-                            if !ctrl_pressed {
-                                if input_state.key_pressed(egui::Key::ArrowUp) {
-                                    if !active_tab.history.is_empty() {
-                                        let new_index = match active_tab.history_index {
-                                            None => Some(active_tab.history.len() - 1),
-                                            Some(0) => Some(0),
-                                            Some(i) => Some(i - 1),
-                                        };
-                                        if let Some(idx) = new_index {
-                                            active_tab.input = active_tab.history[idx].clone();
-                                            active_tab.history_index = new_index;
+                            // Строка ввода
+                            let response = ui.horizontal(|ui| {
+                                let prompt = format!("{}> ", active_tab.current_dir.display());
+                                ui.label(prompt);
+
+                                let text_edit = TextEdit::singleline(&mut active_tab.input)
+                                    .desired_width(f32::INFINITY)
+                                    .text_color(self.fg_color)
+                                    .font(egui::TextStyle::Monospace)
+                                    .frame(false);
+
+                                ui.add(text_edit)
+                            }).inner;
+
+                            // Фокус при старте
+                            if !self.focus_requested {
+                                ui.ctx().memory_mut(|mem| mem.request_focus(response.id));
+                                self.focus_requested = true;
+                            }
+
+                            // Обработка Enter
+                            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                let command = active_tab.input.trim().to_string();
+                                if !command.is_empty() {
+                                    // Здесь мы не можем вызвать self.execute_command напрямую,
+                                    // потому что у нас есть active_tab (mutable ссылка на self.tabs).
+                                    // Выход: сохраняем команду и обработаем после закрытия scroll area.
+                                    // Для простоты скопируем команду и обработаем после.
+                                    let cmd = command.clone();
+                                    active_tab.input.clear();
+                                    // Но execute_command требует &mut self, а у нас есть active_tab.
+                                    // Можно временно отпустить active_tab, но в замыкании это сложно.
+                                    // Альтернатива: передать команду через канал или обработать после show.
+                                    // Пока сделаем так: отпустим active_tab перед вызовом execute_command.
+                                    // Для этого нужно выйти из области видимости active_tab.
+                                    // Сделаем это после show, используя захваченную команду.
+                                    // Положим команду в переменную и обработаем позже.
+                                    drop(active_tab); // освобождаем заимствование
+                                    self.execute_command(&cmd);
+                                    return; // после execute_command нужно перерисовать, но мы вернёмся в update
+                                }
+                            }
+
+                            // Навигация по истории (без Ctrl)
+                            if response.has_focus() {
+                                let input_state = ui.input(|i| i.clone());
+                                let ctrl_pressed = input_state.modifiers.ctrl;
+
+                                if !ctrl_pressed {
+                                    if input_state.key_pressed(egui::Key::ArrowUp) {
+                                        if !active_tab.history.is_empty() {
+                                            let new_index = match active_tab.history_index {
+                                                None => Some(active_tab.history.len() - 1),
+                                                Some(0) => Some(0),
+                                                Some(i) => Some(i - 1),
+                                            };
+                                            if let Some(idx) = new_index {
+                                                active_tab.input = active_tab.history[idx].clone();
+                                                active_tab.history_index = new_index;
+                                            }
                                         }
-                                    }
-                                } else if input_state.key_pressed(egui::Key::ArrowDown) {
-                                    if let Some(idx) = active_tab.history_index {
-                                        if idx + 1 < active_tab.history.len() {
-                                            active_tab.input = active_tab.history[idx + 1].clone();
-                                            active_tab.history_index = Some(idx + 1);
-                                        } else {
-                                            active_tab.input.clear();
-                                            active_tab.history_index = None;
+                                    } else if input_state.key_pressed(egui::Key::ArrowDown) {
+                                        if let Some(idx) = active_tab.history_index {
+                                            if idx + 1 < active_tab.history.len() {
+                                                active_tab.input = active_tab.history[idx + 1].clone();
+                                                active_tab.history_index = Some(idx + 1);
+                                            } else {
+                                                active_tab.input.clear();
+                                                active_tab.history_index = None;
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        ui.add_space(50.0); // пространство для скролла
-                    });
+                            ui.add_space(50.0); // пространство для скролла
+                        });
+                } // active_tab выходит из области видимости здесь
 
                 // Глобальные горячие клавиши для вкладок
                 if ui.input(|i| i.key_pressed(egui::Key::T) && i.modifiers.ctrl) {
