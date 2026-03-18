@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 use std::process::Command;
+use crate::utils::search_in_path;
 use std::env;
 use chrono::Local;
 use sysinfo::System;
@@ -217,30 +218,59 @@ pub fn cmd_exit(_args: &[String], _ctx: &mut CommandContext) -> Result<String, S
 }
 
 pub fn cmd_run(args: &[String], ctx: &mut CommandContext) -> Result<String, String> {
-    if args.len() < 2 { return Err("Usage: run <program> [args...]".to_string()); }
+    if args.len() < 2 {
+        return Err("Usage: run <program> [args...]".to_string());
+    }
     let program = &args[1];
     let program_args = &args[2..];
+
+    // 1. Проверяем абсолютный путь
     let path = if Path::new(program).is_absolute() {
         PathBuf::from(program)
     } else {
+        // 2. Ищем в текущей папке
         let candidate = ctx.state.current_dir.join(program);
-        if candidate.exists() { candidate } else {
-            return Err(format!("Program not found: {}", program));
+        if candidate.exists() {
+            candidate
+        } else {
+            // 3. Ищем в PATH
+            match search_in_path(program) {
+                Some(p) => p,
+                None => return Err(format!("Program not found in PATH: {}", program)),
+            }
         }
     };
+
     let output = std::process::Command::new(&path)
         .args(program_args)
         .current_dir(&ctx.state.current_dir)
         .output()
         .map_err(|e| format!("Failed to execute program: {}", e))?;
+
     let mut result = String::new();
-    if !output.stdout.is_empty() { result.push_str(&String::from_utf8_lossy(&output.stdout)); }
+    if !output.stdout.is_empty() {
+        result.push_str(&String::from_utf8_lossy(&output.stdout));
+    }
     if !output.stderr.is_empty() {
         if !result.is_empty() { result.push('\n'); }
         result.push_str(&String::from_utf8_lossy(&output.stderr));
     }
-    if result.is_empty() { result = format!("Program exited with status: {}", output.status); }
+    if result.is_empty() {
+        result = format!("Program exited with status: {}", output.status);
+    }
     Ok(result)
+}
+
+/// Команда which – показывает полный путь к программе, найденной в PATH.
+pub fn cmd_which(args: &[String], _ctx: &mut CommandContext) -> Result<String, String> {
+    if args.len() < 2 {
+        return Err("Usage: which <program>".to_string());
+    }
+    let program = &args[1];
+    match search_in_path(program) {
+        Some(path) => Ok(path.display().to_string()),
+        None => Err(format!("{} not found in PATH", program)),
+    }
 }
 
 pub fn cmd_calc(args: &[String], _ctx: &mut CommandContext) -> Result<String, String> {
@@ -251,10 +281,6 @@ pub fn cmd_calc(args: &[String], _ctx: &mut CommandContext) -> Result<String, St
         Err(e) => Err(format!("Calculation error: {}", e)),
     }
 }
-
-// --- НОВЫЕ КОМАНДЫ ---
-
-// ========== Управление файлами и папками ==========
 
 pub fn cmd_mkdir(args: &[String], ctx: &mut CommandContext) -> Result<String, String> {
     if args.len() < 2 { return Err("Usage: mkdir <dirname>".to_string()); }
