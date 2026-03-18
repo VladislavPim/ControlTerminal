@@ -4,6 +4,7 @@ mod app;
 mod commands;
 mod logger;
 mod terminal;
+mod utils;
 
 use app::TerminalApp;
 use eframe::egui;
