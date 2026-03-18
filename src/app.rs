@@ -226,42 +226,37 @@ impl TerminalApp {
     }
 
     fn execute_command(&mut self, command_line: &str) {
-        self.logger.log_command(command_line);
-        let active_idx = self.active_tab;
-        self.tabs[active_idx].history.push(command_line.to_string());
-        self.tabs[active_idx].history_index = None;
+    self.logger.log_command(command_line);
+    let active_idx = self.active_tab;
+    self.tabs[active_idx].history.push(command_line.to_string());
+    self.tabs[active_idx].history_index = None;
 
-        let trimmed = command_line.trim();
-        if trimmed.is_empty() {
-            return;
-        }
+    let trimmed = command_line.trim();
+    if trimmed.is_empty() {
+        return;
+    }
 
-        let prompt = format!("{}> ", self.tabs[active_idx].current_dir.display());
-        self.tabs[active_idx].add_output(format!("{}{}", prompt, command_line));
+    let prompt = format!("{}> ", self.tabs[active_idx].current_dir.display());
+    self.tabs[active_idx].add_output(format!("{}{}", prompt, command_line));
 
-        let mut parts: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
-        if parts.is_empty() {
-            return;
-        }
+    let mut parts: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
+    if parts.is_empty() {
+        return;
+    }
 
-        // Проверка на глобальные алиасы
-        if let Some(alias_value) = self.global_aliases.get(&parts[0]) {
-            let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
-            new_parts.extend(parts.into_iter().skip(1));
-            parts = new_parts;
-        }
+    // Проверка на глобальные алиасы
+    if let Some(alias_value) = self.global_aliases.get(&parts[0]) {
+        let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
+        new_parts.extend(parts.into_iter().skip(1));
+        parts = new_parts;
+    }
 
-        let cmd_name = parts[0].clone();
-        let args = parts;
+    let cmd_name = parts[0].clone();
+    let args = parts;
 
-        let cmd_fn = match self.registry.get(&cmd_name) {
-            Some(f) => f,
-            None => {
-                self.tabs[active_idx].add_output(format!("Unknown command: {}", cmd_name));
-                return;
-            }
-        };
-
+    // Проверяем, есть ли такая встроенная команда
+    if let Some(cmd_fn) = self.registry.get(&cmd_name) {
+        // Встроенная команда
         let mut state = TerminalState {
             current_dir: self.tabs[active_idx].current_dir.clone(),
             aliases: self.global_aliases.clone(),
@@ -295,8 +290,46 @@ impl TerminalApp {
                 self.tabs[active_idx].add_output(format!("Error: {}", err));
             }
         }
-        self.tabs[active_idx].add_output(String::new());
+    } else {
+        // Не встроенная команда – пробуем выполнить как внешнюю программу
+        match crate::utils::search_in_path(&cmd_name) {
+            Some(path) => {
+                let output = std::process::Command::new(&path)
+                    .args(&args[1..]) // все аргументы, кроме имени команды
+                    .current_dir(&self.tabs[active_idx].current_dir)
+                    .output()
+                    .map_err(|e| format!("Failed to execute: {}", e));
+
+                match output {
+                    Ok(output) => {
+                        let mut result = String::new();
+                        if !output.stdout.is_empty() {
+                            result.push_str(&String::from_utf8_lossy(&output.stdout));
+                        }
+                        if !output.stderr.is_empty() {
+                            if !result.is_empty() { result.push('\n'); }
+                            result.push_str(&String::from_utf8_lossy(&output.stderr));
+                        }
+                        if result.is_empty() {
+                            result = format!("Program exited with status: {}", output.status);
+                        }
+                        for line in result.lines() {
+                            self.tabs[active_idx].add_output(line.to_string());
+                        }
+                    }
+                    Err(e) => {
+                        self.tabs[active_idx].add_output(format!("Error: {}", e));
+                    }
+                }
+            }
+            None => {
+                // Ничего не нашли – выдаём ошибку
+                self.tabs[active_idx].add_output(format!("Unknown command: {}", cmd_name));
+            }
+        }
     }
+    self.tabs[active_idx].add_output(String::new()); // пустая строка между командами
+}
 }
 
 impl eframe::App for TerminalApp {
