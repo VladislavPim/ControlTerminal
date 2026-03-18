@@ -7,8 +7,8 @@ use std::path::PathBuf;
 
 pub struct TerminalState {
     pub current_dir: PathBuf,
-    pub env_vars: HashMap<String, String>,
     pub aliases: HashMap<String, String>,
+    pub env_vars: HashMap<String, String>,
 }
 
 impl TerminalState {
@@ -17,8 +17,8 @@ impl TerminalState {
         let env_vars = env::vars().collect();
         TerminalState {
             current_dir,
-            env_vars,
             aliases: HashMap::new(),
+            env_vars,
         }
     }
 
