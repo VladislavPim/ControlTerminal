@@ -201,81 +201,87 @@ impl TerminalApp {
     }
 
     fn execute_command(&mut self, command_line: &str) {
-        self.logger.log_command(command_line);
-        let active_tab = self.active_tab();
-        active_tab.history.push(command_line.to_string());
-        active_tab.history_index = None;
+    self.logger.log_command(command_line);
+    let command = command_line.to_string();
 
-        let trimmed = command_line.trim();
-        if trimmed.is_empty() {
-            return;
-        }
+    // Получаем индекс активной вкладки и её данные (клонируем то, что нужно для команды)
+    let active_idx = self.active_tab;
+    let current_dir = self.tabs[active_idx].current_dir.clone();
+    let history = &mut self.tabs[active_idx].history;
+    let history_index = &mut self.tabs[active_idx].history_index;
+    let output = &mut self.tabs[active_idx].output;
 
-        let prompt = format!("{}> ", active_tab.current_dir.display());
-        active_tab.add_output(format!("{}{}", prompt, command_line));
+    history.push(command.clone());
+    *history_index = None;
 
-        let mut parts: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
-        if parts.is_empty() {
-            return;
-        }
-
-        // Проверка на глобальные алиасы
-        if let Some(alias_value) = self.global_aliases.get(&parts[0]) {
-            let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
-            new_parts.extend(parts.into_iter().skip(1));
-            parts = new_parts;
-        }
-
-        let cmd_name = parts[0].clone();
-        let args = parts;
-
-        let cmd_fn = match self.registry.get(&cmd_name) {
-            Some(f) => f,
-            None => {
-                active_tab.add_output(format!("Unknown command: {}", cmd_name));
-                return;
-            }
-        };
-
-        // Создаём временное состояние для команды, передавая ссылки на глобальные алиасы и env
-        // Но текущая директория — из активной вкладки
-        let mut state = TerminalState {
-            current_dir: active_tab.current_dir.clone(),
-            aliases: self.global_aliases.clone(), // копия для команды (если команда их изменит, нужно будет синхронизировать)
-            env_vars: self.global_env.clone(),
-        };
-
-        let mut ctx = CommandContext {
-            state: &mut state,
-            bg_color: &mut self.bg_color,
-            fg_color: &mut self.fg_color,
-            logger: &mut self.logger,
-        };
-
-        match cmd_fn(&args, &mut ctx) {
-            Ok(output) => {
-                if output == "\x18EXIT\x18" {
-                    self.should_exit = true;
-                } else if output == "\x1b[2J\x1b[1;1H" {
-                    active_tab.output.clear();
-                } else {
-                    for line in output.lines() {
-                        active_tab.add_output(line.to_string());
-                    }
-                }
-                // Обновляем состояние вкладки и глобальные переменные, если команда их изменила
-                active_tab.current_dir = state.current_dir;
-                self.global_aliases = state.aliases;
-                self.global_env = state.env_vars;
-                // Обновляем конфиг, если что-то изменилось (например, alias или set)
-                self.save_config();
-            }
-            Err(err) => {
-                active_tab.add_output(format!("Error: {}", err));
-            }
-        }
-        active_tab.add_output(String::new()); // пустая строка между командами
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return;
     }
+
+    let prompt = format!("{}> ", current_dir.display());
+    output.push_back(format!("{}{}", prompt, command));
+
+    let mut parts: Vec<String> = trimmed.split_whitespace().map(String::from).collect();
+    if parts.is_empty() {
+        return;
+    }
+
+    // Проверка на глобальные алиасы
+    if let Some(alias_value) = self.global_aliases.get(&parts[0]) {
+        let mut new_parts: Vec<String> = alias_value.split_whitespace().map(String::from).collect();
+        new_parts.extend(parts.into_iter().skip(1));
+        parts = new_parts;
+    }
+
+    let cmd_name = parts[0].clone();
+    let args = parts;
+
+    let cmd_fn = match self.registry.get(&cmd_name) {
+        Some(f) => f,
+        None => {
+            output.push_back(format!("Unknown command: {}", cmd_name));
+            return;
+        }
+    };
+
+    // Создаём состояние для команды
+    let mut state = TerminalState {
+        current_dir: current_dir.clone(),
+        aliases: self.global_aliases.clone(),
+        env_vars: self.global_env.clone(),
+    };
+
+    let mut ctx = CommandContext {
+        state: &mut state,
+        bg_color: &mut self.bg_color,
+        fg_color: &mut self.fg_color,
+        logger: &mut self.logger,
+    };
+
+    match cmd_fn(&args, &mut ctx) {
+        Ok(output_text) => {
+            if output_text == "\x18EXIT\x18" {
+                self.should_exit = true;
+            } else if output_text == "\x1b[2J\x1b[1;1H" {
+                output.clear();
+            } else {
+                for line in output_text.lines() {
+                    output.push_back(line.to_string());
+                }
+            }
+            // Обновляем состояние
+            self.tabs[active_idx].current_dir = state.current_dir;
+            self.global_aliases = state.aliases;
+            self.global_env = state.env_vars;
+            self.save_config();
+        }
+        Err(err) => {
+            output.push_back(format!("Error: {}", err));
+        }
+    }
+    output.push_back(String::new()); // пустая строка между командами
+}
 
     fn save_config(&mut self) {
         self.config.bgcolor = Some(color_to_string(self.bg_color));
